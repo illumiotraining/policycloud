@@ -24,17 +24,18 @@ resource "local_file" "private_key_pem" {
 ###############################
 # 1a. S3 Bucket for flows
 ###############################
-# Generate a random 6-digit number
 resource "random_integer" "suffix" {
   min = 100000
   max = 999999
 }
 
-# Create the S3 bucket with default settings
 resource "aws_s3_bucket" "illumio_flows" {
-  bucket = "illumios3bucketforflows${random_integer.suffix.result}"
+  bucket        = "illumios3bucketforflows${random_integer.suffix.result}"
+  force_destroy = true   # optional: auto-delete objects for lab
+
   tags = {
-    Name        = "illumios3bucketforflows"
+    Name    = "illumios3bucketforflows"
+    company = "illumio"
   }
 }
 
@@ -101,23 +102,11 @@ locals {
     }
   }
 
-  # Mapping env to resources
-  vpc_map = {
-    staging = aws_vpc.staging.id,
-    dev     = aws_vpc.dev.id,
-    prod    = aws_vpc.prod.id
-  }
-
+  # Map environment to the corresponding subnet
   subnet_map = {
-    staging = aws_subnet.staging.id,
-    dev     = aws_subnet.dev.id,
-    prod    = aws_subnet.prod.id
-  }
-
-  sg_map = {
-    staging = aws_security_group.staging.id,
-    dev     = aws_security_group.dev.id,
-    prod    = aws_security_group.prod.id
+    dev     = aws_subnet.dev_subnet.id,
+    staging = aws_subnet.staging_subnet.id,
+    prod    = aws_subnet.prod_subnet.id
   }
 }
 
@@ -125,166 +114,133 @@ locals {
 # 3. Networking: VPC, Subnet, IGW, RT, SG
 ###############################
 
-# VPCs
-resource "aws_vpc" "staging" {
+# VPC
+resource "aws_vpc" "illumio_lab" {
   cidr_block = "10.0.0.0/16"
-  tags = {
-    Name    = "staging-vpc"
-    env     = "staging"
-    company = "acme"
-  }
-}
 
-resource "aws_vpc" "dev" {
-  cidr_block = "10.1.0.0/16"
   tags = {
-    Name    = "dev-vpc"
-    env     = "dev"
-    company = "acme"
-  }
-}
-
-resource "aws_vpc" "prod" {
-  cidr_block = "10.2.0.0/16"
-  tags = {
-    Name    = "prod-vpc"
-    env     = "prod"
-    company = "acme"
+    Name    = "illumio_lab"
+    company = "illumio"
   }
 }
 
 # Subnets
-resource "aws_subnet" "staging" {
-  vpc_id                  = aws_vpc.staging.id
+resource "aws_subnet" "dev_subnet" {
+  vpc_id                  = aws_vpc.illumio_lab.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
-  tags = {
-    Name    = "staging-subnet"
-    env     = "staging"
-    company = "acme"
-  }
-}
 
-resource "aws_subnet" "dev" {
-  vpc_id                  = aws_vpc.dev.id
-  cidr_block              = "10.1.1.0/24"
-  availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true
   tags = {
-    Name    = "dev-subnet"
+    Name    = "dev_subnet"
     env     = "dev"
-    company = "acme"
+    company = "illumio"
   }
 }
 
-resource "aws_subnet" "prod" {
-  vpc_id                  = aws_vpc.prod.id
-  cidr_block              = "10.2.1.0/24"
+resource "aws_subnet" "staging_subnet" {
+  vpc_id                  = aws_vpc.illumio_lab.id
+  cidr_block              = "10.0.2.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
+
   tags = {
-    Name    = "prod-subnet"
+    Name    = "staging_subnet"
+    env     = "staging"
+    company = "illumio"
+  }
+}
+
+resource "aws_subnet" "prod_subnet" {
+  vpc_id                  = aws_vpc.illumio_lab.id
+  cidr_block              = "10.0.3.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name    = "prod_subnet"
     env     = "prod"
-    company = "acme"
+    company = "illumio"
   }
 }
 
-# Internet Gateways
-resource "aws_internet_gateway" "staging" {
-  vpc_id = aws_vpc.staging.id
+# Internet Gateway
+resource "aws_internet_gateway" "lab_ig" {
+  vpc_id = aws_vpc.illumio_lab.id
+
   tags = {
-    Name = "staging-ig"
-    env = "staging"
-    company = "acme"
+    Name    = "lab_ig"
+    company = "illumio"
   }
 }
 
-resource "aws_internet_gateway" "dev" {
-  vpc_id = aws_vpc.dev.id
-  tags = {
-    Name = "dev-ig"
-    env = "dev"
-    company = "acme"
-  }
-}
-
-resource "aws_internet_gateway" "prod" {
-  vpc_id = aws_vpc.prod.id
-  tags = {
-    Name = "prod-ig"
-    env = "prod"
-    company = "acme"
-  }
-}
-
-# Route Tables and Associations
-resource "aws_route_table" "staging" {
-  vpc_id = aws_vpc.staging.id
+# Route Tables
+resource "aws_route_table" "dev_rt" {
+  vpc_id = aws_vpc.illumio_lab.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.staging.id
+    gateway_id = aws_internet_gateway.lab_ig.id
   }
 
   tags = {
-    Name = "staging-rt"
-    env = "staging"
-    company = "acme"
+    Name    = "dev_rt"
+    env     = "dev"
+    company = "illumio"
   }
 }
 
-resource "aws_route_table" "dev" {
-  vpc_id = aws_vpc.dev.id
+resource "aws_route_table" "staging_rt" {
+  vpc_id = aws_vpc.illumio_lab.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.dev.id
+    gateway_id = aws_internet_gateway.lab_ig.id
   }
 
   tags = {
-    Name = "dev-rt"
-    env = "dev"
-    company = "acme"
+    Name    = "staging_rt"
+    env     = "staging"
+    company = "illumio"
   }
 }
 
-resource "aws_route_table" "prod" {
-  vpc_id = aws_vpc.prod.id
+resource "aws_route_table" "prod_rt" {
+  vpc_id = aws_vpc.illumio_lab.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.prod.id
+    gateway_id = aws_internet_gateway.lab_ig.id
   }
 
   tags = {
-    Name = "prod-rt"
-    env = "prod"
-    company = "acme"
+    Name    = "prod_rt"
+    env     = "prod"
+    company = "illumio"
   }
 }
 
 # Route Table Associations
-resource "aws_route_table_association" "staging" {
-  subnet_id      = aws_subnet.staging.id
-  route_table_id = aws_route_table.staging.id
+resource "aws_route_table_association" "dev_assoc" {
+  subnet_id      = aws_subnet.dev_subnet.id
+  route_table_id = aws_route_table.dev_rt.id
 }
 
-resource "aws_route_table_association" "dev" {
-  subnet_id      = aws_subnet.dev.id
-  route_table_id = aws_route_table.dev.id
+resource "aws_route_table_association" "staging_assoc" {
+  subnet_id      = aws_subnet.staging_subnet.id
+  route_table_id = aws_route_table.staging_rt.id
 }
 
-resource "aws_route_table_association" "prod" {
-  subnet_id      = aws_subnet.prod.id
-  route_table_id = aws_route_table.prod.id
+resource "aws_route_table_association" "prod_assoc" {
+  subnet_id      = aws_subnet.prod_subnet.id
+  route_table_id = aws_route_table.prod_rt.id
 }
 
-# Security Groups
-resource "aws_security_group" "staging" {
-  name        = "staging-sg"
-  vpc_id      = aws_vpc.staging.id
-  description = "Allow SSH access"
+# Security Group (shared for Illumio)
+resource "aws_security_group" "lab_sg" {
+  name        = "lab_sg"
+  vpc_id      = aws_vpc.illumio_lab.id
+  description = "Managed by Illumio for demo"
 
   ingress {
     from_port   = 22
@@ -301,68 +257,14 @@ resource "aws_security_group" "staging" {
   }
 
   tags = {
-    Name = "staging-sg"
-    env = "staging"
-    company = "acme"
-  }
-}
-
-resource "aws_security_group" "dev" {
-  name        = "dev-sg"
-  vpc_id      = aws_vpc.dev.id
-  description = "Allow SSH access"
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "dev-sg"
-    env = "dev"
-    company = "acme"
-  }
-}
-
-resource "aws_security_group" "prod" {
-  name        = "prod-sg"
-  vpc_id      = aws_vpc.prod.id
-  description = "Allow SSH access"
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "prod-sg"
-    env = "prod"
-    company = "acme"
+    Name    = "lab_sg"
+    company = "illumio"
   }
 }
 
 ###############################
 # 4. EC2 Instances
 ###############################
-
 variable "ami" {
   default = "ami-0e95a5e2743ec9ec9"
 }
@@ -373,7 +275,7 @@ resource "aws_instance" "ec2" {
   ami                    = var.ami
   instance_type          = "t2.micro"
   subnet_id              = local.subnet_map[each.value.env]
-  vpc_security_group_ids = [local.sg_map[each.value.env]]
+  vpc_security_group_ids = [aws_security_group.lab_sg.id]
   key_name               = aws_key_pair.shared_key.key_name
 
   tags = {
@@ -382,6 +284,6 @@ resource "aws_instance" "ec2" {
     env        = each.value.env
     role       = each.value.role
     compliance = each.value.compliance
-    company    = "acme"
+    company    = "illumio"
   }
 }
