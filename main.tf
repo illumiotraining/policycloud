@@ -31,7 +31,7 @@ resource "random_integer" "suffix" {
 
 resource "aws_s3_bucket" "illumio_flows" {
   bucket        = "illumios3bucketforflows${random_integer.suffix.result}"
-  force_destroy = true   # optional: auto-delete objects for lab
+  force_destroy = true
 
   tags = {
     Name    = "illumios3bucketforflows"
@@ -40,7 +40,7 @@ resource "aws_s3_bucket" "illumio_flows" {
 }
 
 ###############################
-# 2. Locals for configuration
+# 2. Locals
 ###############################
 locals {
   environments = ["staging", "dev", "prod"]
@@ -102,18 +102,22 @@ locals {
     }
   }
 
-  # Map environment to the corresponding subnet
   subnet_map = {
-    dev     = aws_subnet.dev_subnet.id,
-    staging = aws_subnet.staging_subnet.id,
+    dev     = aws_subnet.dev_subnet.id
+    staging = aws_subnet.staging_subnet.id
     prod    = aws_subnet.prod_subnet.id
+  }
+
+  security_group_map = {
+    dev     = aws_security_group.dev_sg.id
+    staging = aws_security_group.staging_sg.id
+    prod    = aws_security_group.prod_sg.id
   }
 }
 
 ###############################
-# 3. Networking: VPC, Subnet, IGW, RT, SG
+# 3. Networking
 ###############################
-
 # VPC
 resource "aws_vpc" "illumio_lab" {
   cidr_block = "10.0.0.0/16"
@@ -236,11 +240,12 @@ resource "aws_route_table_association" "prod_assoc" {
   route_table_id = aws_route_table.prod_rt.id
 }
 
-# Security Group (shared for Illumio)
-resource "aws_security_group" "lab_sg" {
-  name        = "lab_sg"
-  vpc_id      = aws_vpc.illumio_lab.id
-  description = "Managed by Illumio for demo"
+###############################
+# 4. Security Groups (per env)
+###############################
+resource "aws_security_group" "dev_sg" {
+  name   = "dev_sg"
+  vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
     from_port   = 22
@@ -257,13 +262,64 @@ resource "aws_security_group" "lab_sg" {
   }
 
   tags = {
-    Name    = "lab_sg"
+    Name    = "dev_sg"
+    env     = "dev"
+    company = "illumio"
+  }
+}
+
+resource "aws_security_group" "staging_sg" {
+  name   = "staging_sg"
+  vpc_id = aws_vpc.illumio_lab.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "staging_sg"
+    env     = "staging"
+    company = "illumio"
+  }
+}
+
+resource "aws_security_group" "prod_sg" {
+  name   = "prod_sg"
+  vpc_id = aws_vpc.illumio_lab.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "prod_sg"
+    env     = "prod"
     company = "illumio"
   }
 }
 
 ###############################
-# 4. EC2 Instances
+# 5. EC2 Instances
 ###############################
 variable "ami" {
   default = "ami-0e95a5e2743ec9ec9"
@@ -275,7 +331,7 @@ resource "aws_instance" "ec2" {
   ami                    = var.ami
   instance_type          = "t2.micro"
   subnet_id              = local.subnet_map[each.value.env]
-  vpc_security_group_ids = [aws_security_group.lab_sg.id]
+  vpc_security_group_ids = [local.security_group_map[each.value.env]]
   key_name               = aws_key_pair.shared_key.key_name
 
   tags = {
