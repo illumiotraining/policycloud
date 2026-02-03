@@ -43,8 +43,6 @@ resource "aws_s3_bucket" "illumio_flows" {
 # 2. Locals
 ###############################
 locals {
-  environments = ["staging", "dev", "prod"]
-
   ec2_instances = {
     "monitoring-staging-jumpbox" = {
       app        = "monitoring"
@@ -109,16 +107,17 @@ locals {
   }
 
   security_group_map = {
-    dev     = aws_security_group.dev_sg.id
-    staging = aws_security_group.staging_sg.id
-    prod    = aws_security_group.prod_sg.id
+    jumpbox    = aws_security_group.jumpbox_sg.id
+    web        = aws_security_group.web_sg.id
+    db         = aws_security_group.db_sg.id
+    processing = aws_security_group.processing_sg.id
+    counter    = aws_security_group.counter_sg.id
   }
 }
 
 ###############################
 # 3. Networking
 ###############################
-# VPC
 resource "aws_vpc" "illumio_lab" {
   cidr_block = "10.0.0.0/16"
 
@@ -128,7 +127,6 @@ resource "aws_vpc" "illumio_lab" {
   }
 }
 
-# Subnets
 resource "aws_subnet" "dev_subnet" {
   vpc_id                  = aws_vpc.illumio_lab.id
   cidr_block              = "10.0.1.0/24"
@@ -168,7 +166,6 @@ resource "aws_subnet" "prod_subnet" {
   }
 }
 
-# Internet Gateway
 resource "aws_internet_gateway" "lab_ig" {
   vpc_id = aws_vpc.illumio_lab.id
 
@@ -178,7 +175,6 @@ resource "aws_internet_gateway" "lab_ig" {
   }
 }
 
-# Route Tables
 resource "aws_route_table" "dev_rt" {
   vpc_id = aws_vpc.illumio_lab.id
 
@@ -188,7 +184,7 @@ resource "aws_route_table" "dev_rt" {
   }
 
   tags = {
-    Name    = "dev_rt"
+    Name    = "rt_dev"
     env     = "dev"
     company = "illumio"
   }
@@ -203,7 +199,7 @@ resource "aws_route_table" "staging_rt" {
   }
 
   tags = {
-    Name    = "staging_rt"
+    Name    = "rt_staging"
     env     = "staging"
     company = "illumio"
   }
@@ -218,13 +214,12 @@ resource "aws_route_table" "prod_rt" {
   }
 
   tags = {
-    Name    = "prod_rt"
+    Name    = "rt_prod"
     env     = "prod"
     company = "illumio"
   }
 }
 
-# Route Table Associations
 resource "aws_route_table_association" "dev_assoc" {
   subnet_id      = aws_subnet.dev_subnet.id
   route_table_id = aws_route_table.dev_rt.id
@@ -241,10 +236,10 @@ resource "aws_route_table_association" "prod_assoc" {
 }
 
 ###############################
-# 4. Security Groups (per env)
+# 4. Security Groups (per role)
 ###############################
-resource "aws_security_group" "dev_sg" {
-  name   = "dev_sg"
+resource "aws_security_group" "jumpbox_sg" {
+  name   = "jumpbox_sg"
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
@@ -262,19 +257,26 @@ resource "aws_security_group" "dev_sg" {
   }
 
   tags = {
-    Name    = "dev_sg"
-    env     = "dev"
+    Name    = "jumpbox_sg"
+    role    = "jumpbox"
     company = "illumio"
   }
 }
 
-resource "aws_security_group" "staging_sg" {
-  name   = "staging_sg"
+resource "aws_security_group" "web_sg" {
+  name   = "web_sg"
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -287,21 +289,21 @@ resource "aws_security_group" "staging_sg" {
   }
 
   tags = {
-    Name    = "staging_sg"
-    env     = "staging"
+    Name    = "web_sg"
+    role    = "web"
     company = "illumio"
   }
 }
 
-resource "aws_security_group" "prod_sg" {
-  name   = "prod_sg"
+resource "aws_security_group" "db_sg" {
+  name   = "db_sg"
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 5432
+    to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {
@@ -312,8 +314,58 @@ resource "aws_security_group" "prod_sg" {
   }
 
   tags = {
-    Name    = "prod_sg"
-    env     = "prod"
+    Name    = "db_sg"
+    role    = "db"
+    company = "illumio"
+  }
+}
+
+resource "aws_security_group" "processing_sg" {
+  name   = "processing_sg"
+  vpc_id = aws_vpc.illumio_lab.id
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "processing_sg"
+    role    = "processing"
+    company = "illumio"
+  }
+}
+
+resource "aws_security_group" "counter_sg" {
+  name   = "counter_sg"
+  vpc_id = aws_vpc.illumio_lab.id
+
+  ingress {
+    from_port   = 9000
+    to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name    = "counter_sg"
+    role    = "counter"
     company = "illumio"
   }
 }
@@ -331,7 +383,7 @@ resource "aws_instance" "ec2" {
   ami                    = var.ami
   instance_type          = "t2.micro"
   subnet_id              = local.subnet_map[each.value.env]
-  vpc_security_group_ids = [local.security_group_map[each.value.env]]
+  vpc_security_group_ids = [local.security_group_map[each.value.role]]
   key_name               = aws_key_pair.shared_key.key_name
 
   tags = {
