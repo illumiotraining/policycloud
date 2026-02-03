@@ -236,7 +236,7 @@ resource "aws_route_table_association" "prod_assoc" {
 }
 
 ###############################
-# 4. Security Groups (per role)
+# 4. Security Groups (per role, SSH only)
 ###############################
 resource "aws_security_group" "jumpbox_sg" {
   name   = "jumpbox_sg"
@@ -268,15 +268,8 @@ resource "aws_security_group" "web_sg" {
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -300,10 +293,10 @@ resource "aws_security_group" "db_sg" {
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 5432
-    to_port     = 5432
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -325,10 +318,10 @@ resource "aws_security_group" "processing_sg" {
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -350,10 +343,10 @@ resource "aws_security_group" "counter_sg" {
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
-    from_port   = 9000
-    to_port     = 9000
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -391,7 +384,3 @@ resource "aws_instance" "ec2" {
     app        = each.value.app
     env        = each.value.env
     role       = each.value.role
-    compliance = each.value.compliance
-    company    = "illumio"
-  }
-}
