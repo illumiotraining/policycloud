@@ -113,6 +113,18 @@ locals {
     processing = aws_security_group.processing_sg.id
     counter    = aws_security_group.counter_sg.id
   }
+
+  private_ip_map = {
+    "monitoring-staging-jumpbox" = "10.0.2.50"  # jumpbox
+    "finance-dev-web"            = "10.0.1.10"
+    "finance-dev-processing"     = "10.0.1.20"
+    "finance-dev-db"             = "10.0.1.30"
+    "crm-dev-counter"            = "10.0.1.40"
+    "finance-prod-web"           = "10.0.3.10"
+    "finance-prod-processing"    = "10.0.3.20"
+    "finance-prod-db"            = "10.0.3.30"
+    "crm-prod-counter"           = "10.0.3.40"
+  }
 }
 
 ###############################
@@ -364,7 +376,7 @@ resource "aws_security_group" "counter_sg" {
 }
 
 ###############################
-# 5. EC2 Instances
+# 5. EC2 Instances (static IPs)
 ###############################
 variable "ami" {
   default = "ami-0e95a5e2743ec9ec9"
@@ -373,11 +385,17 @@ variable "ami" {
 resource "aws_instance" "ec2" {
   for_each = local.ec2_instances
 
-  ami                    = var.ami
-  instance_type          = "t2.micro"
-  subnet_id              = local.subnet_map[each.value.env]
-  vpc_security_group_ids = [local.security_group_map[each.value.role]]
-  key_name               = aws_key_pair.shared_key.key_name
+  ami           = var.ami
+  instance_type = "t2.micro"
+  subnet_id     = local.subnet_map[each.value.env]
+
+  private_ip = lookup(local.private_ip_map, each.key)
+
+  vpc_security_group_ids = [
+    local.security_group_map[each.value.role]
+  ]
+
+  key_name = aws_key_pair.shared_key.key_name
 
   tags = {
     Name       = each.key
