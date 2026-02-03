@@ -384,3 +384,7 @@ resource "aws_instance" "ec2" {
     app        = each.value.app
     env        = each.value.env
     role       = each.value.role
+    compliance = each.value.compliance
+    company    = "illumio"
+  }
+}
