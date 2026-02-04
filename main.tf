@@ -386,7 +386,7 @@ resource "aws_instance" "ec2" {
   for_each = local.ec2_instances
 
   ami           = var.ami
-  instance_type = "t2.micro"
+  instance_type = "t2.nano"
   subnet_id     = local.subnet_map[each.value.env]
 
   private_ip = lookup(local.private_ip_map, each.key)
