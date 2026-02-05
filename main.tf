@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 ###############################
-# 1. Shared Key Pairs
+# 1. Shared Key Pair
 ###############################
 resource "tls_private_key" "example" {
   algorithm = "RSA"
