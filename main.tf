@@ -44,23 +44,11 @@ resource "aws_s3_bucket" "illumio_flows" {
 ###############################
 locals {
   ec2_instances = {
-    "monitoring-staging-jumpbox" = {
+    "monitoring-staging-nagios" = {
       app        = "monitoring"
       env        = "staging"
-      role       = "jumpbox"
+      role       = "nagios"
       compliance = "medium"
-    },
-    "finance-dev-web" = {
-      app        = "finance"
-      env        = "dev"
-      role       = "web"
-      compliance = "low"
-    },
-    "finance-dev-processing" = {
-      app        = "finance"
-      env        = "dev"
-      role       = "processing"
-      compliance = "low"
     },
     "finance-dev-db" = {
       app        = "finance"
@@ -68,11 +56,11 @@ locals {
       role       = "db"
       compliance = "low"
     },
-    "crm-dev-counter" = {
-      app        = "crm"
-      env        = "dev"
-      role       = "counter"
-      compliance = "low"
+   "crm-dev-counter" = {
+     app        = "crm"
+     env        = "dev"
+     role       = "counter"
+     compliance = "low"
     },
     "finance-prod-web" = {
       app        = "finance"
@@ -107,7 +95,7 @@ locals {
   }
 
   security_group_map = {
-    jumpbox    = aws_security_group.jumpbox_sg.id
+    nagios    = aws_security_group.nagios.id
     web        = aws_security_group.web_sg.id
     db         = aws_security_group.db_sg.id
     processing = aws_security_group.processing_sg.id
@@ -115,9 +103,7 @@ locals {
   }
 
   private_ip_map = {
-    "monitoring-staging-jumpbox" = "10.0.2.50"  # jumpbox
-    "finance-dev-web"            = "10.0.1.10"
-    "finance-dev-processing"     = "10.0.1.20"
+    "monitoring-staging-nagios" = "10.0.2.50"
     "finance-dev-db"             = "10.0.1.30"
     "crm-dev-counter"            = "10.0.1.40"
     "finance-prod-web"           = "10.0.3.10"
@@ -250,8 +236,8 @@ resource "aws_route_table_association" "prod_assoc" {
 ###############################
 # 4. Security Groups (per role, SSH only)
 ###############################
-resource "aws_security_group" "jumpbox_sg" {
-  name   = "jumpbox_sg"
+resource "aws_security_group" "nagios_sg" {
+  name   = "nagios_sg"
   vpc_id = aws_vpc.illumio_lab.id
 
   ingress {
@@ -269,8 +255,8 @@ resource "aws_security_group" "jumpbox_sg" {
   }
 
   tags = {
-    Name    = "jumpbox_sg"
-    role    = "jumpbox"
+    Name    = "nagios_sg"
+    role    = "nagios"
     company = "illumio"
   }
 }
@@ -359,14 +345,14 @@ resource "aws_security_group" "counter_sg" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
+}
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
+}
 
   tags = {
     Name    = "counter_sg"
@@ -386,6 +372,7 @@ resource "aws_instance" "ec2" {
   for_each = local.ec2_instances
 
   ami           = var.ami
+  # instance_type = "t2.micro" ( change to t3a.nano 5th feb 2026 - NM/PC )
   instance_type = "t3a.nano"
   subnet_id     = local.subnet_map[each.value.env]
 
