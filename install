@@ -1,0 +1,7 @@
+# Additional commands once terraform has run
+# Revised Terraform for Policy Cloud single VPC
+
+# Perfectly fine to leave this here as a guide for students
+
+terraform output instance_public_ip
+ssh -i /root/.ssh/my-keypair.pem ec2-user@x.x.x.x
